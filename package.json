@@ -6,7 +6,9 @@
   "author": "alphasec",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "mongoose": "^8.0.0"
   },
   "scripts": {
     "start": "node server.js"
