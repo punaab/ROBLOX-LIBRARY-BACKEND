@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Setup
-mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(process.env.MONGO_URL);
 
 const Book = mongoose.model('Book', {
   bookId: String,
