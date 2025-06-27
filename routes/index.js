@@ -138,4 +138,180 @@ router.post('/books', async (req, res) => {
   }
 });
 
+// Update an existing book
+router.put('/books/:bookId', async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const update = req.body;
+
+    // Validate required fields for update
+    const { title, content, author, playerId } = update;
+    if (!title || !content || !author || !playerId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: title, content, author, and playerId are required' 
+      });
+    }
+
+    // Ensure content is an array
+    if (update.content && !Array.isArray(update.content)) {
+      update.content = [update.content];
+    }
+
+    const updated = await Book.findOneAndUpdate(
+      { bookId }, 
+      update, 
+      {
+        new: true,
+        upsert: false // only update, don't insert
+      }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Book not found" 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      book: updated 
+    });
+  } catch (err) {
+    console.error('Error updating book:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+});
+
+// Alternative PUT endpoint with /api prefix
+router.put('/api/books/:bookId', async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const update = req.body;
+
+    // Validate required fields for update
+    const { title, content, author, playerId } = update;
+    if (!title || !content || !author || !playerId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: title, content, author, and playerId are required' 
+      });
+    }
+
+    // Ensure content is an array
+    if (update.content && !Array.isArray(update.content)) {
+      update.content = [update.content];
+    }
+
+    const updated = await Book.findOneAndUpdate(
+      { bookId }, 
+      update, 
+      {
+        new: true,
+        upsert: false // only update, don't insert
+      }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Book not found" 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      book: updated 
+    });
+  } catch (err) {
+    console.error('Error updating book:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+});
+
+// Partial update an existing book
+router.patch('/books/:bookId', async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const update = req.body;
+
+    // Ensure content is an array if it's being updated
+    if (update.content && !Array.isArray(update.content)) {
+      update.content = [update.content];
+    }
+
+    const updated = await Book.findOneAndUpdate(
+      { bookId }, 
+      update, 
+      {
+        new: true,
+        upsert: false // only update, don't insert
+      }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Book not found" 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      book: updated 
+    });
+  } catch (err) {
+    console.error('Error updating book:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+});
+
+// Alternative PATCH endpoint with /api prefix
+router.patch('/api/books/:bookId', async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const update = req.body;
+
+    // Ensure content is an array if it's being updated
+    if (update.content && !Array.isArray(update.content)) {
+      update.content = [update.content];
+    }
+
+    const updated = await Book.findOneAndUpdate(
+      { bookId }, 
+      update, 
+      {
+        new: true,
+        upsert: false // only update, don't insert
+      }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Book not found" 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      book: updated 
+    });
+  } catch (err) {
+    console.error('Error updating book:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+});
+
 module.exports = router;
