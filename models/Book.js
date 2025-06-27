@@ -7,6 +7,8 @@ const bookSchema = new mongoose.Schema({
   content: [String],
   coverId: String,
   playerId: String,
+  status: { type: String, default: 'Draft' },
+  published: { type: Boolean, default: false },
   upvotes: { type: Number, default: 0 },
   comments: { type: Array, default: [] },
   reports: { type: Array, default: [] },
