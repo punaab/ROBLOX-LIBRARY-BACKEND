@@ -16,6 +16,21 @@ router.get('/api/books', async (req, res) => {
   res.json(books);
 });
 
+// Get drafts for a player
+router.get('/api/books/drafts', async (req, res) => {
+  try {
+    const playerId = req.query.playerId;
+    if (!playerId) {
+      return res.status(400).json({ error: 'playerId is required' });
+    }
+    const drafts = await Book.find({ playerId, status: 'Draft' });
+    res.json(drafts);
+  } catch (err) {
+    console.error('Error fetching drafts:', err);
+    res.status(500).json({ error: 'Failed to fetch drafts' });
+  }
+});
+
 // Get a specific book
 router.get('/api/books/:id', async (req, res) => {
   const book = await Book.findOne({ bookId: req.params.id });
@@ -30,23 +45,19 @@ router.get('/books/:bookId', async (req, res) => {
   res.json(book);
 });
 
-// Publish a new book
+// Create a new book
 router.post('/api/books', async (req, res) => {
   try {
-    // Validate required fields
-    const { title, content, author, playerId } = req.body;
+    const { bookId, title, content, playerId, coverId, createdDate } = req.body;
     
-    if (!title || !content || !author || !playerId) {
+    if (!bookId || !title || !content || !playerId) {
       return res.status(400).json({ 
-        error: 'Missing required fields: title, content, author, and playerId are required' 
+        error: 'Missing required fields: bookId, title, content, and playerId are required' 
       });
     }
 
-    // Generate a unique bookId if not provided
-    let bookId = req.body.bookId;
-    if (!bookId) {
-      bookId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    }
+    // Use a default author if not provided
+    const author = req.body.author || 'Anonymous';
 
     // Check if bookId already exists
     const existingBook = await Book.findOne({ bookId });
@@ -54,20 +65,19 @@ router.post('/api/books', async (req, res) => {
       return res.status(409).json({ error: 'Book with this ID already exists' });
     }
 
-    // Create book object with proper structure
     const bookData = {
       bookId,
       title,
       author,
       content: Array.isArray(content) ? content : [content],
       playerId,
-      coverId: req.body.coverId || '',
+      coverId: coverId || '',
       status: req.body.status || 'Draft',
       published: req.body.published || false,
       upvotes: 0,
       comments: [],
       reports: [],
-      createdAt: new Date().toISOString()
+      createdAt: createdDate || new Date().toISOString()
     };
 
     const newBook = new Book(bookData);
@@ -75,61 +85,7 @@ router.post('/api/books', async (req, res) => {
     
     res.status(201).json({ 
       message: 'Book saved!',
-      bookId: bookId,
-      book: newBook
-    });
-  } catch (err) {
-    console.error('Error saving book:', err);
-    res.status(500).json({ error: 'Failed to save book' });
-  }
-});
-
-// Alternative POST endpoint for book creation
-router.post('/books', async (req, res) => {
-  try {
-    // Validate required fields
-    const { title, content, author, playerId } = req.body;
-    
-    if (!title || !content || !author || !playerId) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: title, content, author, and playerId are required' 
-      });
-    }
-
-    // Generate a unique bookId if not provided
-    let bookId = req.body.bookId;
-    if (!bookId) {
-      bookId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    }
-
-    // Check if bookId already exists
-    const existingBook = await Book.findOne({ bookId });
-    if (existingBook) {
-      return res.status(409).json({ error: 'Book with this ID already exists' });
-    }
-
-    // Create book object with proper structure
-    const bookData = {
       bookId,
-      title,
-      author,
-      content: Array.isArray(content) ? content : [content],
-      playerId,
-      coverId: req.body.coverId || '',
-      status: req.body.status || 'Draft',
-      published: req.body.published || false,
-      upvotes: 0,
-      comments: [],
-      reports: [],
-      createdAt: new Date().toISOString()
-    };
-
-    const newBook = new Book(bookData);
-    await newBook.save();
-    
-    res.status(201).json({ 
-      message: 'Book saved!',
-      bookId: bookId,
       book: newBook
     });
   } catch (err) {
@@ -139,85 +95,38 @@ router.post('/books', async (req, res) => {
 });
 
 // Update an existing book
-router.put('/books/:bookId', async (req, res) => {
-  try {
-    const { bookId } = req.params;
-    const update = req.body;
-
-    // Validate required fields for update
-    const { title, content, author, playerId } = update;
-    if (!title || !content || !author || !playerId) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: title, content, author, and playerId are required' 
-      });
-    }
-
-    // Ensure content is an array
-    if (update.content && !Array.isArray(update.content)) {
-      update.content = [update.content];
-    }
-
-    const updated = await Book.findOneAndUpdate(
-      { bookId }, 
-      update, 
-      {
-        new: true,
-        upsert: false // only update, don't insert
-      }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Book not found" 
-      });
-    }
-
-    res.json({ 
-      success: true, 
-      book: updated 
-    });
-  } catch (err) {
-    console.error('Error updating book:', err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
-    });
-  }
-});
-
-// Alternative PUT endpoint with /api prefix
 router.put('/api/books/:bookId', async (req, res) => {
   try {
     const { bookId } = req.params;
-    const update = req.body;
+    const { title, content, playerId, coverId, createdDate } = req.body;
 
-    // Validate required fields for update
-    const { title, content, author, playerId } = update;
-    if (!title || !content || !author || !playerId) {
+    if (!title || !content || !playerId) {
       return res.status(400).json({ 
-        error: 'Missing required fields: title, content, author, and playerId are required' 
+        error: 'Missing required fields: title, content, and playerId are required' 
       });
     }
 
-    // Ensure content is an array
-    if (update.content && !Array.isArray(update.content)) {
-      update.content = [update.content];
-    }
+    const update = {
+      title,
+      author: req.body.author || 'Anonymous',
+      content: Array.isArray(content) ? content : [content],
+      playerId,
+      coverId: coverId || '',
+      status: req.body.status || 'Draft',
+      published: req.body.published || false,
+      createdAt: createdDate || new Date().toISOString()
+    };
 
     const updated = await Book.findOneAndUpdate(
       { bookId }, 
       update, 
-      {
-        new: true,
-        upsert: false // only update, don't insert
-      }
+      { new: true, upsert: false }
     );
 
     if (!updated) {
       return res.status(404).json({ 
         success: false, 
-        message: "Book not found" 
+        message: 'Book not found' 
       });
     }
 
@@ -227,77 +136,33 @@ router.put('/api/books/:bookId', async (req, res) => {
     });
   } catch (err) {
     console.error('Error updating book:', err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
-    });
+    res.status(500).json({ error: 'Failed to update book' });
   }
 });
 
 // Partial update an existing book
-router.patch('/books/:bookId', async (req, res) => {
-  try {
-    const { bookId } = req.params;
-    const update = req.body;
-
-    // Ensure content is an array if it's being updated
-    if (update.content && !Array.isArray(update.content)) {
-      update.content = [update.content];
-    }
-
-    const updated = await Book.findOneAndUpdate(
-      { bookId }, 
-      update, 
-      {
-        new: true,
-        upsert: false // only update, don't insert
-      }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Book not found" 
-      });
-    }
-
-    res.json({ 
-      success: true, 
-      book: updated 
-    });
-  } catch (err) {
-    console.error('Error updating book:', err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
-    });
-  }
-});
-
-// Alternative PATCH endpoint with /api prefix
 router.patch('/api/books/:bookId', async (req, res) => {
   try {
     const { bookId } = req.params;
     const update = req.body;
 
-    // Ensure content is an array if it's being updated
     if (update.content && !Array.isArray(update.content)) {
       update.content = [update.content];
+    }
+    if (!update.author) {
+      update.author = 'Anonymous';
     }
 
     const updated = await Book.findOneAndUpdate(
       { bookId }, 
       update, 
-      {
-        new: true,
-        upsert: false // only update, don't insert
-      }
+      { new: true, upsert: false }
     );
 
     if (!updated) {
       return res.status(404).json({ 
         success: false, 
-        message: "Book not found" 
+        message: 'Book not found' 
       });
     }
 
@@ -307,11 +172,20 @@ router.patch('/api/books/:bookId', async (req, res) => {
     });
   } catch (err) {
     console.error('Error updating book:', err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
-    });
+    res.status(500).json({ error: 'Failed to update book' });
   }
+});
+
+// Remove redundant endpoints
+// Note: /books/* endpoints are not used by the client, so consider removing them unless needed
+router.post('/books', async (req, res) => {
+  return res.redirect(308, '/api/books'); // Redirect to /api/books
+});
+router.put('/books/:bookId', async (req, res) => {
+  return res.redirect(308, `/api/books/${req.params.bookId}`);
+});
+router.patch('/books/:bookId', async (req, res) => {
+  return res.redirect(308, `/api/books/${req.params.bookId}`);
 });
 
 module.exports = router;
