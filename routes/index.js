@@ -48,7 +48,7 @@ router.get('/books/:bookId', async (req, res) => {
 // Create a new book
 router.post('/api/books', async (req, res) => {
   try {
-    const { bookId, title, content, playerId, coverId, createdDate } = req.body;
+    const { bookId, title, content, playerId, coverId, createdAt } = req.body;
     
     if (!bookId || !title || !content || !playerId) {
       return res.status(400).json({ 
@@ -77,7 +77,7 @@ router.post('/api/books', async (req, res) => {
       upvotes: 0,
       comments: [],
       reports: [],
-      createdAt: createdDate || new Date().toISOString()
+      createdAt: createdAt || new Date().toISOString()
     };
 
     const newBook = new Book(bookData);
@@ -98,7 +98,7 @@ router.post('/api/books', async (req, res) => {
 router.put('/api/books/:bookId', async (req, res) => {
   try {
     const { bookId } = req.params;
-    const { title, content, playerId, coverId, createdDate } = req.body;
+    const { title, content, playerId, coverId, createdAt } = req.body;
 
     if (!title || !content || !playerId) {
       return res.status(400).json({ 
@@ -114,7 +114,7 @@ router.put('/api/books/:bookId', async (req, res) => {
       coverId: coverId || '',
       status: req.body.status || 'Draft',
       published: req.body.published || false,
-      createdAt: createdDate || new Date().toISOString()
+      createdAt: createdAt || new Date().toISOString()
     };
 
     const updated = await Book.findOneAndUpdate(
@@ -152,6 +152,9 @@ router.patch('/api/books/:bookId', async (req, res) => {
     if (!update.author) {
       update.author = 'Anonymous';
     }
+    if (update.createdAt) {
+      update.createdAt = update.createdAt || new Date().toISOString();
+    }
 
     const updated = await Book.findOneAndUpdate(
       { bookId }, 
@@ -177,9 +180,8 @@ router.patch('/api/books/:bookId', async (req, res) => {
 });
 
 // Remove redundant endpoints
-// Note: /books/* endpoints are not used by the client, so consider removing them unless needed
 router.post('/books', async (req, res) => {
-  return res.redirect(308, '/api/books'); // Redirect to /api/books
+  return res.redirect(308, '/api/books');
 });
 router.put('/books/:bookId', async (req, res) => {
   return res.redirect(308, `/api/books/${req.params.bookId}`);
