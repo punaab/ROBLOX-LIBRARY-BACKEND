@@ -12,7 +12,8 @@ const bookSchema = new mongoose.Schema({
   upvotes: { type: Number, default: 0 },
   comments: { type: Array, default: [] },
   reports: { type: Array, default: [] },
-  createdAt: String
+  createdAt: String,
+  updatedAt: String,
 });
 
 module.exports = mongoose.model('Book', bookSchema);
