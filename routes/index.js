@@ -17,25 +17,20 @@ router.get('/api/books', async (req, res) => {
 });
 
 // Get drafts for a player
+// Get drafts for a player (DRAFTS ONLY)
 router.get('/api/books/drafts', async (req, res) => {
   try {
     const playerId = req.query.playerId;
     if (!playerId) {
       return res.status(400).json({ error: 'playerId is required' });
     }
-    const drafts = await Book.find({ playerId, status: 'Draft' });
+    // Only return books with BOTH status: 'Draft' AND published: false
+    const drafts = await Book.find({ playerId, status: 'Draft', published: false });
     res.json(drafts);
   } catch (err) {
     console.error('Error fetching drafts:', err);
     res.status(500).json({ error: 'Failed to fetch drafts' });
   }
-});
-
-// Get a specific book
-router.get('/api/books/:id', async (req, res) => {
-  const book = await Book.findOne({ bookId: req.params.id });
-  if (!book) return res.status(404).json({ error: 'Not found' });
-  res.json(book);
 });
 
 // Get a book by bookId (alternative endpoint)
@@ -183,7 +178,13 @@ router.patch('/api/books/:bookId', async (req, res) => {
 router.delete('/api/books/:bookId', async (req, res) => {
   try {
     const bookId = req.params.bookId;
-    const deleted = await Book.findOneAndDelete({ bookId });
+    console.log('[DELETE] bookId param:', bookId);
+
+    // Extra debug: log all IDs in DB
+    const allBooks = await Book.find({ status: 'Draft' });
+    console.log('Drafts in DB:', allBooks.map(b => b.bookId));
+
+    const deleted = await Book.findOneAndDelete({ bookId: bookId });
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Book not found' });
     }
