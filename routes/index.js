@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const Book = require('../models/Book');
+const axios = require('axios');
 
 // Serve the homepage
 router.get('/', (req, res) => {
@@ -204,6 +205,28 @@ router.put('/books/:bookId', async (req, res) => {
 });
 router.patch('/books/:bookId', async (req, res) => {
   return res.redirect(308, `/api/books/${req.params.bookId}`);
+});
+
+// === Roblox API Proxy ===
+
+// Fetch user's public Decal assets
+router.get('/api/user-decals/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    // Get first 30 decals (you can add paging if needed)
+    const url = `https://catalog.roblox.com/v1/search/items?category=Decal&creatorTargetId=${userId}&limit=30&sortOrder=Desc`;
+    const robloxRes = await axios.get(url);
+    // Extract needed data
+    const results = (robloxRes.data.data || []).map(asset => ({
+      name: asset.name,
+      id: asset.id,
+      thumbnail: asset.thumbnailImageUrl || `https://www.roblox.com/asset-thumbnail/image?assetId=${asset.id}&width=150&height=150&format=png`
+    }));
+    res.json({ success: true, decals: results });
+  } catch (err) {
+    console.error('Failed to fetch user decals:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch user decals' });
+  }
 });
 
 module.exports = router;
