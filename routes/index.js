@@ -179,6 +179,21 @@ router.patch('/api/books/:bookId', async (req, res) => {
   }
 });
 
+// Delete a book by bookId (not Mongo _id)
+router.delete('/api/books/:bookId', async (req, res) => {
+  try {
+    const bookId = req.params.bookId;
+    const deleted = await Book.findOneAndDelete({ bookId });
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Book not found' });
+    }
+    res.json({ success: true, message: 'Book deleted', book: deleted });
+  } catch (err) {
+    console.error('Error deleting book:', err);
+    res.status(500).json({ error: 'Failed to delete book' });
+  }
+});
+
 // Remove redundant endpoints
 router.post('/books', async (req, res) => {
   return res.redirect(308, '/api/books');
