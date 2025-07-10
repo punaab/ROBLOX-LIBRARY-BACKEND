@@ -42,27 +42,21 @@ router.get('/books/:bookId', async (req, res) => {
 });
 
 // Create a new book
+// Upsert (insert or update) a book by bookId
 router.post('/api/books', async (req, res) => {
   try {
     const { bookId, title, content, playerId, coverId, createdAt } = req.body;
-    
+
     if (!bookId || !title || !content || !playerId) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: bookId, title, content, and playerId are required' 
+      return res.status(400).json({
+        error: 'Missing required fields: bookId, title, content, and playerId are required'
       });
     }
 
-    // Use a default author if not provided
     const author = req.body.author || 'Anonymous';
 
-    // Check if bookId already exists
-    const existingBook = await Book.findOne({ bookId });
-    if (existingBook) {
-      return res.status(409).json({ error: 'Book with this ID already exists' });
-    }
-
-    const bookData = {
-      bookId,
+    // Build update doc (don't overwrite arrays unless provided)
+    const updateDoc = {
       title,
       author,
       content: Array.isArray(content) ? content : [content],
@@ -76,17 +70,31 @@ router.post('/api/books', async (req, res) => {
       createdAt: createdAt || new Date().toISOString()
     };
 
-    const newBook = new Book(bookData);
-    await newBook.save();
-    
-    res.status(201).json({ 
-      message: 'Book saved!',
-      bookId,
-      book: newBook
+    // ⭐️ Merge existing upvotes/comments/reports (if any) for safety
+    const existing = await Book.findOne({ bookId });
+    if (existing) {
+      updateDoc.upvotes = existing.upvotes;
+      updateDoc.comments = existing.comments;
+      updateDoc.reports = existing.reports;
+    }    
+
+    const options = { upsert: true, new: true, setDefaultsOnInsert: true };
+
+    // Upsert (insert new or update existing by bookId)
+    const book = await Book.findOneAndUpdate(
+      { bookId },
+      updateDoc,
+      options
+    );
+
+    res.status(200).json({
+      message: 'Book upserted!',
+      bookId: book.bookId,
+      book
     });
   } catch (err) {
-    console.error('Error saving book:', err);
-    res.status(500).json({ error: 'Failed to save book' });
+    console.error('Error upserting book:', err);
+    res.status(500).json({ error: 'Failed to upsert book' });
   }
 });
 
