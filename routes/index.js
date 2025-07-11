@@ -13,7 +13,7 @@ router.get('/', (req, res) => {
 
 // Get all books
 router.get('/api/books', async (req, res) => {
-  const books = await Book.find();
+  const books = await Book.find().lean();
   res.json(books);
 });
 
@@ -26,7 +26,7 @@ router.get('/api/books/drafts', async (req, res) => {
       return res.status(400).json({ error: 'playerId is required' });
     }
     // Only return books with BOTH status: 'Draft' AND published: false
-    const drafts = await Book.find({ playerId, status: 'Draft', published: false });
+    const drafts = await Book.find({ playerId, status: 'Draft', published: false }).lean();
     res.json(drafts);
   } catch (err) {
     console.error('Error fetching drafts:', err);
@@ -34,9 +34,25 @@ router.get('/api/books/drafts', async (req, res) => {
   }
 });
 
-// Get a book by bookId (alternative endpoint)
-router.get('/books/:bookId', async (req, res) => {
-  const book = await Book.findOne({ bookId: req.params.bookId });
+// Get published books for a player
+router.get('/api/books/published', async (req, res) => {
+  try {
+    const playerId = req.query.playerId;
+    if (!playerId) {
+      return res.status(400).json({ error: 'playerId is required' });
+    }
+    // Only return books with BOTH status: 'Published' AND published: true
+    const publishedBooks = await Book.find({ playerId, status: 'Published', published: true }).lean();
+    res.json(publishedBooks);
+  } catch (err) {
+    console.error('Error fetching published books:', err);
+    res.status(500).json({ error: 'Failed to fetch published books' });
+  }
+});
+
+// Get a book by bookId
+router.get('/api/books/:bookId', async (req, res) => {
+  const book = await Book.findOne({ bookId: req.params.bookId }).lean();
   if (!book) return res.status(404).json({ error: 'Book not found' });
   res.json(book);
 });
@@ -67,7 +83,8 @@ router.post('/api/books', async (req, res) => {
       upvotes: 0,
       comments: [],
       reports: [],
-      createdAt: createdAt || new Date().toISOString()
+      createdAt: createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     // ⭐️ Merge existing upvotes/comments/reports (if any) for safety
@@ -118,7 +135,8 @@ router.put('/api/books/:bookId', async (req, res) => {
       coverId: coverId || '',
       status: req.body.status || 'Draft',
       published: req.body.published || false,
-      createdAt: createdAt || new Date().toISOString()
+      createdAt: createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     const updated = await Book.findOneAndUpdate(
@@ -156,9 +174,9 @@ router.patch('/api/books/:bookId', async (req, res) => {
     if (!update.author) {
       update.author = 'Anonymous';
     }
-    if (update.createdAt) {
-      update.createdAt = update.createdAt || new Date().toISOString();
-    }
+    
+    // Always set updatedAt for any update
+    update.updatedAt = new Date().toISOString();
 
     const updated = await Book.findOneAndUpdate(
       { bookId }, 
@@ -190,7 +208,7 @@ router.delete('/api/books/:bookId', async (req, res) => {
     console.log('[DELETE] bookId param:', bookId);
 
     // Extra debug: log all IDs in DB
-    const allBooks = await Book.find({ status: 'Draft' });
+    const allBooks = await Book.find({ status: 'Draft' }).lean();
     console.log('Drafts in DB:', allBooks.map(b => b.bookId));
 
     const deleted = await Book.findOneAndDelete({ bookId: bookId });
@@ -204,7 +222,61 @@ router.delete('/api/books/:bookId', async (req, res) => {
   }
 });
 
-// Remove redundant endpoints
+// Publish a draft book
+router.post('/api/books/:bookId/publish', async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const { playerId } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({ 
+        error: 'playerId is required' 
+      });
+    }
+
+    // Find the draft book
+    const draftBook = await Book.findOne({ 
+      bookId, 
+      playerId, 
+      status: 'Draft', 
+      published: false 
+    });
+
+    if (!draftBook) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Draft book not found or already published' 
+      });
+    }
+
+    // Update the book to published status
+    const publishedBook = await Book.findOneAndUpdate(
+      { bookId },
+      { 
+        status: 'Published',
+        published: true,
+        updatedAt: new Date().toISOString()
+      },
+      { new: true }
+    );
+
+    console.log(`[PUBLISH] Book ${bookId} published successfully for player ${playerId}`);
+
+    res.json({ 
+      success: true, 
+      message: 'Book published successfully!',
+      book: publishedBook
+    });
+  } catch (err) {
+    console.error('Error publishing book:', err);
+    res.status(500).json({ error: 'Failed to publish book' });
+  }
+});
+
+// Legacy redirects for backward compatibility (optional - can be removed)
+router.get('/books/:bookId', async (req, res) => {
+  return res.redirect(308, `/api/books/${req.params.bookId}`);
+});
 router.post('/books', async (req, res) => {
   return res.redirect(308, '/api/books');
 });
