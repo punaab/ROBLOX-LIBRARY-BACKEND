@@ -52,7 +52,6 @@ router.get('/api/books/published', async (req, res) => {
 });
 
 // Get a book by bookId
-// Get a book by bookId and increment views
 // Only fetch, don't increment
 router.get('/api/books/:bookId', async (req, res) => {
   try {
@@ -64,6 +63,7 @@ router.get('/api/books/:bookId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch book' });
   }
 });
+
 
 // Create a new book
 // Upsert (insert or update) a book by bookId
