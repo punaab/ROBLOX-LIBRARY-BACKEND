@@ -51,12 +51,22 @@ router.get('/api/books/published', async (req, res) => {
 });
 
 // Get a book by bookId
+// Get a book by bookId and increment views
 router.get('/api/books/:bookId', async (req, res) => {
-  const book = await Book.findOne({ bookId: req.params.bookId }).lean();
-  if (!book) return res.status(404).json({ error: 'Book not found' });
-  res.json(book);
+  try {
+    // Find and increment views atomically, then return updated book (lean() not needed here)
+    const book = await Book.findOneAndUpdate(
+      { bookId: req.params.bookId },
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+    res.json(book);
+  } catch (err) {
+    console.error('Error fetching/incrementing views:', err);
+    res.status(500).json({ error: 'Failed to fetch book' });
+  }
 });
-
 // Create a new book
 // Upsert (insert or update) a book by bookId
 router.post('/api/books', async (req, res) => {

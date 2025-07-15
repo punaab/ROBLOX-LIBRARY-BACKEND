@@ -10,6 +10,7 @@ const bookSchema = new mongoose.Schema({
   status: { type: String, default: 'Draft' },
   published: { type: Boolean, default: false },
   upvotes: { type: Number, default: 0 },
+  views: { type: Number, default: 0 },      // <-- ADD THIS LINE!
   comments: { type: Array, default: [] },
   reports: { type: Array, default: [] },
   createdAt: String,
@@ -17,3 +18,4 @@ const bookSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Book', bookSchema);
+
