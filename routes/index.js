@@ -3,7 +3,6 @@ const path = require('path');
 const router = express.Router();
 const Book = require('../models/Book');
 const axios = require('axios');
-const Vote = require('../models/Vote'); // If you have a Vote model, or just update Book
 
 // Serve the homepage
 router.get('/', (req, res) => {
