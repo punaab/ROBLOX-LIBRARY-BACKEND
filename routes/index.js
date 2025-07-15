@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const Book = require('../models/Book');
+const View = require('../models/View'); // at top
 const axios = require('axios');
 
 // Serve the homepage
@@ -52,21 +53,18 @@ router.get('/api/books/published', async (req, res) => {
 
 // Get a book by bookId
 // Get a book by bookId and increment views
+// Only fetch, don't increment
 router.get('/api/books/:bookId', async (req, res) => {
   try {
-    // Find and increment views atomically, then return updated book (lean() not needed here)
-    const book = await Book.findOneAndUpdate(
-      { bookId: req.params.bookId },
-      { $inc: { views: 1 } },
-      { new: true }
-    );
+    const book = await Book.findOne({ bookId: req.params.bookId });
     if (!book) return res.status(404).json({ error: 'Book not found' });
     res.json(book);
   } catch (err) {
-    console.error('Error fetching/incrementing views:', err);
+    console.error('Error fetching book:', err);
     res.status(500).json({ error: 'Failed to fetch book' });
   }
 });
+
 // Create a new book
 // Upsert (insert or update) a book by bookId
 router.post('/api/books', async (req, res) => {
@@ -343,6 +341,34 @@ router.post('/api/votes', async (req, res) => {
     await book.save();
   }
   res.json({ success: true, upvotes: book.upvotes });
+});
+
+
+router.post('/api/views', async (req, res) => {
+  try {
+    const { playerId, bookId } = req.body;
+    if (!playerId || !bookId) {
+      return res.status(400).json({ error: 'playerId and bookId required' });
+    }
+    const today = (new Date()).toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const exists = await View.findOne({ playerId, bookId, date: today });
+    if (exists) {
+      const book = await Book.findOne({ bookId });
+      return res.status(200).json({ success: true, duplicate: true, views: book?.views ?? 0 });
+    }
+
+    await View.create({ playerId, bookId, date: today });
+    const updatedBook = await Book.findOneAndUpdate(
+      { bookId },
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+    return res.json({ success: true, duplicate: false, views: updatedBook?.views ?? 0 });
+  } catch (err) {
+    console.error('Failed to record view:', err);
+    res.status(500).json({ error: 'Failed to record view' });
+  }
 });
 
 module.exports = router;
