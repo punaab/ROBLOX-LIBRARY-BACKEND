@@ -3,6 +3,7 @@ const path = require('path');
 const router = express.Router();
 const Book = require('../models/Book');
 const axios = require('axios');
+const Vote = require('../models/Vote'); // If you have a Vote model, or just update Book
 
 // Serve the homepage
 router.get('/', (req, res) => {
@@ -317,6 +318,32 @@ router.get('/api/user-decals/:userId', async (req, res) => {
     console.error('Failed to fetch user decals:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch user decals' });
   }
+});
+
+// GET /api/votes?playerId=123&bookId=abc
+router.get('/api/votes', async (req, res) => {
+  const { playerId, bookId } = req.query;
+  if (!playerId || !bookId) return res.status(400).json({ error: "Missing playerId or bookId" });
+  const book = await Book.findOne({ bookId });
+  if (!book) return res.json({ voted: false });
+  const hasVoted = (book.voters || []).includes(playerId);
+  res.json({ voted: hasVoted });
+});
+
+// POST /api/votes
+router.post('/api/votes', async (req, res) => {
+  const { playerId, bookId, voteType } = req.body;
+  if (voteType !== "up") return res.status(400).json({ error: "Only 'up' supported" });
+  if (!playerId || !bookId) return res.status(400).json({ error: "Missing playerId or bookId" });
+  const book = await Book.findOne({ bookId });
+  if (!book) return res.status(404).json({ error: "Book not found" });
+  if (!book.voters) book.voters = [];
+  if (!book.voters.includes(playerId)) {
+    book.voters.push(playerId);
+    book.upvotes = (book.upvotes || 0) + 1;
+    await book.save();
+  }
+  res.json({ success: true, upvotes: book.upvotes });
 });
 
 module.exports = router;
