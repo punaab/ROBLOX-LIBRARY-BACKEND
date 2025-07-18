@@ -234,44 +234,44 @@ router.delete('/api/books/:bookId', async (req, res) => {
 router.post('/api/books/:bookId/publish', async (req, res) => {
   try {
     const { bookId } = req.params;
-    const { playerId } = req.body;
+    const { playerId, glowingBook, customCover } = req.body;
 
     if (!playerId) {
-      return res.status(400).json({ 
-        error: 'playerId is required' 
-      });
+      return res.status(400).json({ error: 'playerId is required' });
     }
 
     // Find the draft book
-    const draftBook = await Book.findOne({ 
-      bookId, 
-      playerId, 
-      status: 'Draft', 
-      published: false 
+    const draftBook = await Book.findOne({
+      bookId,
+      playerId,
+      status: 'Draft',
+      published: false
     });
 
     if (!draftBook) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Draft book not found or already published' 
+      return res.status(404).json({
+        success: false,
+        message: 'Draft book not found or already published'
       });
     }
 
-    // Update the book to published status
+    // Update the book to published status, including paid add-ons
     const publishedBook = await Book.findOneAndUpdate(
       { bookId },
-      { 
+      {
         status: 'Published',
         published: true,
+        glowingBook: !!glowingBook,      // save as true/false
+        customCover: !!customCover,
         updatedAt: new Date().toISOString()
       },
       { new: true }
     );
 
-    console.log(`[PUBLISH] Book ${bookId} published successfully for player ${playerId}`);
+    console.log(`[PUBLISH] Book ${bookId} published with add-ons:`, { glowingBook, customCover });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Book published successfully!',
       book: publishedBook
     });
@@ -343,7 +343,6 @@ router.post('/api/votes', async (req, res) => {
   res.json({ success: true, upvotes: book.upvotes });
 });
 
-
 router.post('/api/views', async (req, res) => {
   try {
     const { playerId, bookId } = req.body;
@@ -370,5 +369,6 @@ router.post('/api/views', async (req, res) => {
     res.status(500).json({ error: 'Failed to record view' });
   }
 });
+
 
 module.exports = router;

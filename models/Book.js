@@ -16,6 +16,8 @@ const bookSchema = new mongoose.Schema({
   reports: { type: Array, default: [] },
   createdAt: String,
   updatedAt: String,
+  glowingBook: { type: Boolean, default: false },
+  customCover: { type: Boolean, default: false },
 });
 
 module.exports = mongoose.model('Book', bookSchema);
