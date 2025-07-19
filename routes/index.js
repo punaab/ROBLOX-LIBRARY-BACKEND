@@ -370,5 +370,86 @@ router.post('/api/views', async (req, res) => {
   }
 });
 
+// --- In index.js ---
+
+// Store or update playtime for a player
+router.post('/api/playtime', async (req, res) => {
+  try {
+    const { playerId, minutes, username, thumbnail } = req.body;
+    if (!playerId || minutes == null) return res.status(400).json({ error: "playerId and minutes are required" });
+
+    // Use upsert to keep the leaderboard updated
+    await Playtime.findOneAndUpdate(
+      { playerId },
+      { $set: { minutes, username, thumbnail } },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error updating playtime:', err);
+    res.status(500).json({ error: 'Failed to update playtime' });
+  }
+});
+
+// Get the playtime leaderboard (top 10)
+router.get('/api/playtime/leaderboard', async (req, res) => {
+  try {
+    const topPlayers = await Playtime.find().sort({ minutes: -1 }).limit(10).lean();
+    res.json(topPlayers);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+// POST /api/books/:bookId/comments
+router.post('/api/books/:bookId/comments', async (req, res) => {
+  const { playerId, username, text } = req.body;
+  if (!playerId || !text || !username) return res.status(400).json({ error: 'Missing fields' });
+  const newComment = {
+    playerId,
+    username,
+    text,
+    createdAt: new Date().toISOString(),
+    likes: [],
+    dislikes: [],
+  };
+  const book = await Book.findOneAndUpdate(
+    { bookId: req.params.bookId },
+    { $push: { comments: newComment } },
+    { new: true }
+  );
+  res.json({ success: true, comments: book.comments });
+});
+
+// GET /api/books/:bookId/comments
+router.get('/api/books/:bookId/comments', async (req, res) => {
+  const book = await Book.findOne({ bookId: req.params.bookId });
+  if (!book) return res.status(404).json({ error: "Book not found" });
+  // Sort comments: by most likes, then newest
+  const sorted = [...(book.comments || [])].sort((a, b) =>
+    (b.likes?.length || 0) - (a.likes?.length || 0) || new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  res.json({ success: true, comments: sorted });
+});
+
+// POST /api/books/:bookId/comments/:index/like
+router.post('/api/books/:bookId/comments/:index/like', async (req, res) => {
+  const { playerId, action } = req.body; // action = "like" or "dislike"
+  const book = await Book.findOne({ bookId: req.params.bookId });
+  if (!book) return res.status(404).json({ error: "Book not found" });
+  const idx = parseInt(req.params.index, 10);
+  if (!book.comments[idx]) return res.status(404).json({ error: "Comment not found" });
+
+  // Remove from both arrays first (prevents double-vote)
+  book.comments[idx].likes = (book.comments[idx].likes || []).filter(id => id !== playerId);
+  book.comments[idx].dislikes = (book.comments[idx].dislikes || []).filter(id => id !== playerId);
+
+  if (action === "like") book.comments[idx].likes.push(playerId);
+  else if (action === "dislike") book.comments[idx].dislikes.push(playerId);
+
+  await book.save();
+  res.json({ success: true, comment: book.comments[idx] });
+});
 
 module.exports = router;
