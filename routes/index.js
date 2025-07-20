@@ -411,7 +411,7 @@ router.post('/api/books/:bookId/comments', async (req, res) => {
     username,
     text,
     createdAt: new Date().toISOString(),
-    likes: [],
+    likes: [playerId],         // 👈 commenter instantly likes their own comment
     dislikes: [],
   };
   const book = await Book.findOneAndUpdate(
