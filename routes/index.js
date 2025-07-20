@@ -433,23 +433,25 @@ router.get('/api/books/:bookId/comments', async (req, res) => {
   res.json({ success: true, comments: sorted });
 });
 
-// POST /api/books/:bookId/comments/:index/like
-router.post('/api/books/:bookId/comments/:index/like', async (req, res) => {
-  const { playerId, action } = req.body; // action = "like" or "dislike"
-  const book = await Book.findOne({ bookId: req.params.bookId });
-  if (!book) return res.status(404).json({ error: "Book not found" });
-  const idx = parseInt(req.params.index, 10);
-  if (!book.comments[idx]) return res.status(404).json({ error: "Comment not found" });
-
-  // Remove from both arrays first (prevents double-vote)
-  book.comments[idx].likes = (book.comments[idx].likes || []).filter(id => id !== playerId);
-  book.comments[idx].dislikes = (book.comments[idx].dislikes || []).filter(id => id !== playerId);
-
-  if (action === "like") book.comments[idx].likes.push(playerId);
-  else if (action === "dislike") book.comments[idx].dislikes.push(playerId);
-
-  await book.save();
-  res.json({ success: true, comment: book.comments[idx] });
+// POST /api/books/:bookId/comments
+router.post('/api/books/:bookId/comments', async (req, res) => {
+  const { playerId, username, text } = req.body;
+  if (!playerId || !text || !username) return res.status(400).json({ error: 'Missing fields' });
+  const newComment = {
+    playerId,
+    username,
+    text,
+    createdAt: new Date().toISOString(),
+    likes: [],
+    dislikes: [],
+  };
+  const book = await Book.findOneAndUpdate(
+    { bookId: req.params.bookId },
+    { $push: { comments: newComment } },
+    { new: true }
+  );
+  res.json({ success: true, comments: book.comments });
 });
+
 
 module.exports = router;
