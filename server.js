@@ -11,10 +11,12 @@ app.use(express.json());
 mongoose.connect(process.env.MONGO_URL);
 
 // Import routes
-const routes = require('./routes/index');
+const routes = require('./routes/index');     // your general app/book routes
+const bibleRoutes = require('./routes/bible'); // your new Bible API proxy routes
 
 // Use routes
 app.use('/', routes);
+app.use('/api/bible', bibleRoutes);  // <-- This line is new
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));

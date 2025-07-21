@@ -406,21 +406,31 @@ router.get('/api/playtime/leaderboard', async (req, res) => {
 router.post('/api/books/:bookId/comments', async (req, res) => {
   const { playerId, username, text } = req.body;
   if (!playerId || !text || !username) return res.status(400).json({ error: 'Missing fields' });
+
+  // Fetch the book first
+  const book = await Book.findOne({ bookId: req.params.bookId });
+  if (!book) return res.status(404).json({ error: 'Book not found' });
+
+  // Check if player has already commented
+  const alreadyCommented = (book.comments || []).some(c => String(c.playerId) === String(playerId));
+  if (alreadyCommented) {
+    return res.status(403).json({ error: 'You have already commented on this book.' });
+  }
+
+  // Otherwise, add new comment
   const newComment = {
     playerId,
     username,
     text,
     createdAt: new Date().toISOString(),
-    likes: [playerId],         // 👈 commenter instantly likes their own comment
+    likes: [playerId],  // Auto-upvote own comment
     dislikes: [],
   };
-  const book = await Book.findOneAndUpdate(
-    { bookId: req.params.bookId },
-    { $push: { comments: newComment } },
-    { new: true }
-  );
+  book.comments.push(newComment);
+  await book.save();
   res.json({ success: true, comments: book.comments });
 });
+
 
 // GET /api/books/:bookId/comments
 router.get('/api/books/:bookId/comments', async (req, res) => {
