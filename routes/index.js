@@ -3,6 +3,8 @@ const path = require('path');
 const router = express.Router();
 const Book = require('../models/Book');
 const View = require('../models/View'); // at top
+const Playtime = require('../models/Playtime');
+const XP = require('../models/XP');
 const axios = require('axios');
 
 // Serve the homepage
@@ -403,6 +405,8 @@ router.get('/api/playtime/leaderboard', async (req, res) => {
 });
 
 // POST /api/books/:bookId/comments
+// -- Only KEEP this one --
+// POST /api/books/:bookId/comments
 router.post('/api/books/:bookId/comments', async (req, res) => {
   const { playerId, username, text } = req.body;
   if (!playerId || !text || !username) return res.status(400).json({ error: 'Missing fields' });
@@ -431,7 +435,6 @@ router.post('/api/books/:bookId/comments', async (req, res) => {
   res.json({ success: true, comments: book.comments });
 });
 
-
 // GET /api/books/:bookId/comments
 router.get('/api/books/:bookId/comments', async (req, res) => {
   const book = await Book.findOne({ bookId: req.params.bookId });
@@ -443,24 +446,62 @@ router.get('/api/books/:bookId/comments', async (req, res) => {
   res.json({ success: true, comments: sorted });
 });
 
-// POST /api/books/:bookId/comments
-router.post('/api/books/:bookId/comments', async (req, res) => {
-  const { playerId, username, text } = req.body;
-  if (!playerId || !text || !username) return res.status(400).json({ error: 'Missing fields' });
-  const newComment = {
-    playerId,
-    username,
-    text,
-    createdAt: new Date().toISOString(),
-    likes: [],
-    dislikes: [],
-  };
-  const book = await Book.findOneAndUpdate(
-    { bookId: req.params.bookId },
-    { $push: { comments: newComment } },
-    { new: true }
+// Get leaderboard for Most Books Written
+router.get('/api/leaderboard/books-written', async (req, res) => {
+  const data = await Book.aggregate([
+    { $group: { _id: "$playerId", count: { $sum: 1 }, author: { $first: "$author" } } },
+    { $sort: { count: -1 } },
+    { $limit: 10 }
+  ]);
+  res.json(data);
+});
+
+const XP = require('../models/XP');
+
+// Award XP
+router.post('/api/xp', async (req, res) => {
+  const { playerId, amount, username } = req.body;
+  if (!playerId || !amount) return res.status(400).json({ error: "Missing playerId or amount" });
+  const xp = await XP.findOneAndUpdate(
+    { playerId },
+    { $inc: { xp: amount }, $set: { username } },
+    { upsert: true, new: true }
   );
-  res.json({ success: true, comments: book.comments });
+  res.json({ success: true, xp: xp.xp });
+});
+
+// Leaderboard
+router.get('/api/xp/leaderboard', async (req, res) => {
+  const top = await XP.find().sort({ xp: -1 }).limit(10).lean();
+  res.json(top);
+});
+
+// Top Reviewer: player with most comments (all books)
+router.get('/api/leaderboard/top-reviewers', async (req, res) => {
+  const books = await Book.find({}, { comments: 1 }).lean();
+  const reviewCounts = {};
+  books.forEach(book => {
+    (book.comments || []).forEach(c => {
+      if (!reviewCounts[c.playerId]) reviewCounts[c.playerId] = { count: 0, username: c.username };
+      reviewCounts[c.playerId].count += 1;
+    });
+  });
+  // Convert to array and sort
+  const arr = Object.entries(reviewCounts).map(([playerId, data]) => ({
+    playerId, username: data.username, count: data.count
+  })).sort((a, b) => b.count - a.count).slice(0, 10);
+  res.json(arr);
+});
+
+// Most Popular Author (total upvotes across all their books)
+router.get('/api/leaderboard/most-popular-author', async (req, res) => {
+  const data = await Book.aggregate([
+    { $match: { published: true } },
+    { $group: { _id: "$playerId", author: { $first: "$author" }, totalUpvotes: { $sum: "$upvotes" } } },
+    { $sort: { totalUpvotes: -1 } },
+    { $limit: 10 }
+  ]);
+  res.json(data);
 });
 
 
