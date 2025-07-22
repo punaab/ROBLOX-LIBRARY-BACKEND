@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 app.use(cors());
@@ -9,6 +10,18 @@ app.use(express.json());
 
 // MongoDB Setup
 mongoose.connect(process.env.MONGO_URL);
+
+// Example: 100 requests per 10 minutes per IP
+const limiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 100,
+  standardHeaders: true, 
+  legacyHeaders: false,    
+  message: "Too many requests, please slow down."
+});
+
+// Apply to ALL routes:
+app.use(limiter);
 
 // Import routes
 const routes = require('./routes/index');     // your general app/book routes

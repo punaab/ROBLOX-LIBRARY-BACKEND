@@ -437,13 +437,16 @@ router.post('/api/books/:bookId/comments', async (req, res) => {
 
 // GET /api/books/:bookId/comments
 router.get('/api/books/:bookId/comments', async (req, res) => {
-  const book = await Book.findOne({ bookId: req.params.bookId });
-  if (!book) return res.status(404).json({ error: "Book not found" });
-  // Sort comments: by most likes, then newest
-  const sorted = [...(book.comments || [])].sort((a, b) =>
-    (b.likes?.length || 0) - (a.likes?.length || 0) || new Date(b.createdAt) - new Date(a.createdAt)
-  );
-  res.json({ success: true, comments: sorted });
+  try {
+    const book = await Book.findOne({ bookId: req.params.bookId });
+    if (!book) return res.status(404).json({ error: "Book not found" });
+    const sorted = [...(book.comments || [])].sort((a, b) =>
+      (b.likes?.length || 0) - (a.likes?.length || 0) || new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    res.json({ success: true, comments: sorted });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch comments" });
+  }
 });
 
 // Get leaderboard for Most Books Written
@@ -455,8 +458,6 @@ router.get('/api/leaderboard/books-written', async (req, res) => {
   ]);
   res.json(data);
 });
-
-const XP = require('../models/XP');
 
 // Award XP
 router.post('/api/xp', async (req, res) => {
