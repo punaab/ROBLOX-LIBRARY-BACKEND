@@ -468,7 +468,7 @@ router.post('/api/xp', async (req, res) => {
       return res.status(400).json({ error: 'playerId, username, and a non-negative amount are required' });
     }
     const xp = await XP.findOneAndUpdate(
-      { Frequent player questions playerId },
+      { playerId },
       { $inc: { xp: Math.floor(amount) }, $set: { username } },
       { upsert: true, new: true }
     );
