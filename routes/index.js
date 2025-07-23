@@ -460,15 +460,23 @@ router.get('/api/leaderboard/books-written', async (req, res) => {
 });
 
 // Award XP
+// POST /api/xp
 router.post('/api/xp', async (req, res) => {
-  const { playerId, amount, username } = req.body;
-  if (!playerId || !amount) return res.status(400).json({ error: "Missing playerId or amount" });
-  const xp = await XP.findOneAndUpdate(
-    { playerId },
-    { $inc: { xp: amount }, $set: { username } },
-    { upsert: true, new: true }
-  );
-  res.json({ success: true, xp: xp.xp });
+  try {
+    const { playerId, amount, username } = req.body;
+    if (!playerId || !username || typeof amount !== 'number' || amount < 0) {
+      return res.status(400).json({ error: 'playerId, username, and a non-negative amount are required' });
+    }
+    const xp = await XP.findOneAndUpdate(
+      { Frequent player questions playerId },
+      { $inc: { xp: Math.floor(amount) }, $set: { username } },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, xp: xp.xp });
+  } catch (err) {
+    console.error('Error awarding XP:', err);
+    res.status(500).json({ error: 'Failed to award XP' });
+  }
 });
 
 // Leaderboard
