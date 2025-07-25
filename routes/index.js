@@ -5,6 +5,7 @@ const Book = require('../models/Book');
 const View = require('../models/View'); // at top
 const Playtime = require('../models/Playtime');
 const XP = require('../models/XP');
+const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
 
 // Serve the homepage
@@ -511,6 +512,40 @@ router.get('/api/leaderboard/most-popular-author', async (req, res) => {
     { $limit: 10 }
   ]);
   res.json(data);
+});
+
+// Award XP for reading a book (only once per book per day)
+router.post('/api/xp/bookread', async (req, res) => {
+  try {
+    const { playerId, username, bookId, title } = req.body;
+    if (!playerId || !bookId || !username) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Check if this player already read this book today
+    const existing = await ReadLog.findOne({ playerId, bookId, date: today });
+    if (existing) {
+      return res.json({ success: true, awarded: false, xp: 0 });
+    }
+
+    // Award XP
+    const XP = require('../models/XP');
+    const xp = await XP.findOneAndUpdate(
+      { playerId },
+      { $inc: { xp: 5 }, $set: { username } },
+      { upsert: true, new: true }
+    );
+
+    // Save the read log
+    await ReadLog.create({ playerId, bookId, date: today });
+
+    res.json({ success: true, awarded: true, xp: 5 });
+  } catch (err) {
+    console.error('❌ Error awarding book read XP:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
 });
 
 
