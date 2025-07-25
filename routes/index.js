@@ -522,7 +522,7 @@ router.post('/api/xp/bookread', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     // Check if this player already read this book today
     const existing = await ReadLog.findOne({ playerId, bookId, date: today });
@@ -530,15 +530,18 @@ router.post('/api/xp/bookread', async (req, res) => {
       return res.json({ success: true, awarded: false, xp: 0 });
     }
 
-    // Award XP
+    // Award XP securely
     const XP = require('../models/XP');
     const xp = await XP.findOneAndUpdate(
       { playerId },
-      { $inc: { xp: 5 }, $set: { username } },
+      {
+        $inc: { xp: 5 },
+        $setOnInsert: { username },
+      },
       { upsert: true, new: true }
     );
 
-    // Save the read log
+    // Save read log to prevent re-awards
     await ReadLog.create({ playerId, bookId, date: today });
 
     res.json({ success: true, awarded: true, xp: 5 });
@@ -547,6 +550,5 @@ router.post('/api/xp/bookread', async (req, res) => {
     res.status(500).json({ success: false, error: 'Server error' });
   }
 });
-
 
 module.exports = router;
