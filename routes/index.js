@@ -8,6 +8,47 @@ const XP = require('../models/XP');
 const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
 
+let mostBooksReadCache = [];
+let lastUpdate = 0;
+
+// Cache for most books read
+
+async function updateMostBooksReadCache() {
+  const now = Date.now();
+  if (now - lastUpdate < 30 * 1000) return; // ⏱ only update every 30s
+
+  const data = await ReadLog.aggregate([
+    {
+      $group: {
+        _id: "$playerId",
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { count: -1 } },
+    { $limit: 10 }
+  ]);
+
+  // Optional: fetch usernames
+  for (const entry of data) {
+    const xpEntry = await XP.findOne({ playerId: entry._id });
+    entry.username = xpEntry?.username || "Unknown";
+  }
+
+  mostBooksReadCache = data;
+  lastUpdate = now;
+}
+
+// Get leaderboard for Most Books Read (based on views)
+router.get('/api/leaderboard/most-books-read', async (req, res) => {
+  try {
+    await updateMostBooksReadCache(); // Ensure cache is up to date
+    res.json(mostBooksReadCache);
+  } catch (err) {
+    console.error('❌ Error fetching most-books-read leaderboard:', err);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
 // Serve the homepage
 router.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../views/index.html'));
@@ -550,5 +591,7 @@ router.post('/api/xp/bookread', async (req, res) => {
     res.status(500).json({ success: false, error: 'Server error' });
   }
 });
+
+
 
 module.exports = router;
