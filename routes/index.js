@@ -7,6 +7,7 @@ const Playtime = require('../models/Playtime');
 const XP = require('../models/XP');
 const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
+const searchRoutes = require('./search');
 
 let mostBooksReadCache = [];
 let lastUpdate = 0;
@@ -42,6 +43,9 @@ async function updateMostBooksReadCache() {
   mostBooksReadCache = data;
   lastUpdate = now;
 }
+
+// Search
+router.use('/api/search', searchRoutes);
 
 // GET /leaderboard/most-books-read
 router.get('/leaderboard/most-books-read', async (req, res) => {
