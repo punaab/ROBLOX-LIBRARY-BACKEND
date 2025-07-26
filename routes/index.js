@@ -15,22 +15,27 @@ let lastUpdate = 0;
 
 async function updateMostBooksReadCache() {
   const now = Date.now();
-  if (now - lastUpdate < 30 * 1000) return; // ⏱ only update every 30s
+  if (now - lastUpdate < 30 * 1000) return; // 30s cache
 
   const data = await ReadLog.aggregate([
     {
       $group: {
         _id: "$playerId",
-        count: { $sum: 1 }
+        uniqueBooks: { $addToSet: "$bookId" }
+      }
+    },
+    {
+      $project: {
+        playerId: "$_id",
+        count: { $size: "$uniqueBooks" }
       }
     },
     { $sort: { count: -1 } },
     { $limit: 10 }
   ]);
 
-  // Optional: fetch usernames
   for (const entry of data) {
-    const xpEntry = await XP.findOne({ playerId: entry._id });
+    const xpEntry = await XP.findOne({ playerId: entry.playerId });
     entry.username = xpEntry?.username || "Unknown";
   }
 
@@ -38,16 +43,17 @@ async function updateMostBooksReadCache() {
   lastUpdate = now;
 }
 
-// Get leaderboard for Most Books Read (based on views)
-router.get('/api/leaderboard/most-books-read', async (req, res) => {
+// GET /leaderboard/most-books-read
+router.get('/leaderboard/most-books-read', async (req, res) => {
   try {
-    await updateMostBooksReadCache(); // Ensure cache is up to date
+    await updateMostBooksReadCache(); // Only hits DB if 30s passed
     res.json(mostBooksReadCache);
   } catch (err) {
-    console.error('❌ Error fetching most-books-read leaderboard:', err);
-    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    console.error("❌ Failed to fetch leaderboard:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 // Serve the homepage
 router.get('/', (req, res) => {
