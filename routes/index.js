@@ -123,6 +123,11 @@ router.get('/api/books/:bookId', async (req, res) => {
 // Upsert (insert or update) a book by bookId
 router.post('/api/books', async (req, res) => {
   try {
+    // Validate request body
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
     const { bookId, title, content, playerId, coverId, createdAt } = req.body;
 
     if (!bookId || !title || !content || !playerId) {
@@ -383,22 +388,37 @@ router.get('/api/votes', async (req, res) => {
 
 // POST /api/votes
 router.post('/api/votes', async (req, res) => {
-  const { playerId, bookId, voteType } = req.body;
-  if (voteType !== "up") return res.status(400).json({ error: "Only 'up' supported" });
-  if (!playerId || !bookId) return res.status(400).json({ error: "Missing playerId or bookId" });
-  const book = await Book.findOne({ bookId });
-  if (!book) return res.status(404).json({ error: "Book not found" });
-  if (!book.voters) book.voters = [];
-  if (!book.voters.includes(playerId)) {
-    book.voters.push(playerId);
-    book.upvotes = (book.upvotes || 0) + 1;
-    await book.save();
+  try {
+    // Validate request body
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
+    const { playerId, bookId, voteType } = req.body;
+    if (voteType !== "up") return res.status(400).json({ error: "Only 'up' supported" });
+    if (!playerId || !bookId) return res.status(400).json({ error: "Missing playerId or bookId" });
+    const book = await Book.findOne({ bookId });
+    if (!book) return res.status(404).json({ error: "Book not found" });
+    if (!book.voters) book.voters = [];
+    if (!book.voters.includes(playerId)) {
+      book.voters.push(playerId);
+      book.upvotes = (book.upvotes || 0) + 1;
+      await book.save();
+    }
+    res.json({ success: true, upvotes: book.upvotes });
+  } catch (err) {
+    console.error('Error processing vote:', err);
+    res.status(500).json({ error: 'Failed to process vote' });
   }
-  res.json({ success: true, upvotes: book.upvotes });
 });
 
 router.post('/api/views', async (req, res) => {
   try {
+    // Validate request body
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
     const { playerId, bookId } = req.body;
     if (!playerId || !bookId) {
       return res.status(400).json({ error: 'playerId and bookId required' });

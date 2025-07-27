@@ -7,7 +7,27 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 app.set('trust proxy', 1); // trust first proxy
 app.use(cors());
-app.use(express.json());
+
+// Enhanced JSON parsing with error handling
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      res.status(400).json({ error: 'Invalid JSON format' });
+      throw new Error('Invalid JSON');
+    }
+  }
+}));
+
+// Error handling middleware for JSON parsing errors
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON format' });
+  }
+  next();
+});
 
 // MongoDB Setup
 mongoose.connect(process.env.MONGO_URL);
@@ -38,6 +58,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).sendFile(path.join(__dirname, 'views/404.html'));
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // Start server
