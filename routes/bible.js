@@ -7,7 +7,7 @@ const BASE_URL = "https://api.scripture.api.bible/v1";
 const BIBLE_ID = "de4e12af7f28f599-01"; // KJV
 
 // Get all books
-router.get('/bible/books', async (req, res) => {
+router.get('/books', async (req, res) => {
   const url = `${BASE_URL}/bibles/${BIBLE_ID}/books`;
   try {
     const result = await axios.get(url, {
@@ -20,7 +20,7 @@ router.get('/bible/books', async (req, res) => {
 });
 
 // Get chapters for a book
-router.get('/bible/books/:bookId/chapters', async (req, res) => {
+router.get('/books/:bookId/chapters', async (req, res) => {
   const { bookId } = req.params;
   const url = `${BASE_URL}/bibles/${BIBLE_ID}/books/${bookId}/chapters`;
   try {
@@ -34,7 +34,7 @@ router.get('/bible/books/:bookId/chapters', async (req, res) => {
 });
 
 // Get verses for a chapter
-router.get('/bible/chapters/:chapterId/verses', async (req, res) => {
+router.get('/chapters/:chapterId/verses', async (req, res) => {
   const { chapterId } = req.params;
   const url = `${BASE_URL}/bibles/${BIBLE_ID}/chapters/${chapterId}/verses`;
   try {
