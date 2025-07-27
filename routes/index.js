@@ -8,11 +8,6 @@ const XP = require('../models/XP');
 const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
 const searchRoutes = require('./search');
-const bibleRoutes = require('./routes/bible');
-
-
-// Bible
-router.use('/api/bible', bibleRoutes);
 
 let mostBooksReadCache = [];
 let lastUpdate = 0;
