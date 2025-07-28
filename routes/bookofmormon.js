@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const bomData = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../data/bookofmormon.json'))
+  fs.readFileSync(path.join(__dirname, '../data/book-of-mormon.json'))
 );
 
 router.get('/bookofmormon', (req, res) => {
