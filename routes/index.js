@@ -8,6 +8,8 @@ const XP = require('../models/XP');
 const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
 const searchRoutes = require('./search');
+const bomRoute = require('./bookofmormon'); // ⬅️ Add this
+
 
 let mostBooksReadCache = [];
 let lastUpdate = 0;
@@ -622,6 +624,7 @@ router.post('/api/xp/bookread', async (req, res) => {
   }
 });
 
+router.use('/api', bomRoute); // ⬅️ This mounts /api/bookofmormon
 
 
 module.exports = router;
