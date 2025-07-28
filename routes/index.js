@@ -8,6 +8,10 @@ const XP = require('../models/XP');
 const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
 const searchRoutes = require('./search');
+const bookofmormon = require('./routes/bookofmormon');
+
+//BOOK OF MORMON
+app.use('/api/bom', require('./routes/bookofmormon'));
 
 let mostBooksReadCache = [];
 let lastUpdate = 0;
