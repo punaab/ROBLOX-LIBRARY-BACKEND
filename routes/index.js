@@ -245,16 +245,114 @@ router.post('/api/books/:bookId/publish', async (req, res) => {
 router.get('/api/user-decals/:userId', async (req, res) => {
   try {
     const userId = req.params.userId;
-    const url = `https://catalog.roblox.com/v1/search/items?category=Decal&creatorTargetId=${userId}&limit=30&sortOrder=Desc`;
-    const robloxRes = await axios.get(url);
-    const results = (robloxRes.data.data || []).map(asset => ({
-      name: asset.name,
-      id: asset.id,
-      thumbnail: asset.thumbnailImageUrl || `https://www.roblox.com/asset-thumbnail/image?assetId=${asset.id}&width=150&height=150&format=png`
-    }));
-    res.json({ success: true, decals: results });
+    
+    // Validate userId
+    if (!userId || isNaN(userId)) {
+      console.log(`Invalid user ID provided: ${userId}`);
+      return res.status(400).json({ success: false, error: 'Invalid user ID' });
+    }
+    
+    console.log(`Fetching decals for user ID: ${userId}`);
+    
+    // Try multiple approaches to fetch user decals
+    let robloxRes = null;
+    let error = null;
+    
+    // Approach 1: Try the catalog API
+    try {
+      const url = `https://catalog.roblox.com/v1/search/items?category=Decal&creatorTargetId=${userId}&limit=30&sortOrder=Desc`;
+      robloxRes = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Referer': 'https://www.roblox.com/'
+        },
+        timeout: 10000
+      });
+      console.log(`Successfully fetched decals using catalog API for user ${userId}, found ${robloxRes.data.data?.length || 0} items`);
+    } catch (err) {
+      console.log(`Catalog API failed for user ${userId}:`, err.response?.status);
+      error = err;
+      
+      // Approach 2: Try the users API as fallback
+      try {
+        const userUrl = `https://users.roblox.com/v1/users/${userId}`;
+        const userRes = await axios.get(userUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.roblox.com/'
+          },
+          timeout: 10000
+        });
+        
+        // If user exists, return empty decals list (user might not have public decals)
+        if (userRes.data) {
+          console.log(`User ${userId} exists but no decals found`);
+          return res.json({ success: true, decals: [] });
+        }
+      } catch (userErr) {
+        console.log(`User API also failed for user ${userId}:`, userErr.response?.status);
+      }
+    }
+    
+    // If we have a successful response, process it
+    if (robloxRes && robloxRes.data) {
+      const results = (robloxRes.data.data || []).map(asset => ({
+        name: asset.name,
+        id: asset.id,
+        thumbnail: asset.thumbnailImageUrl || `https://www.roblox.com/asset-thumbnail/image?assetId=${asset.id}&width=150&height=150&format=png`
+      }));
+      
+      return res.json({ success: true, decals: results });
+    }
+    
+    // If we reach here, both approaches failed
+    throw error || new Error('All API approaches failed');
   } catch (err) {
     console.error('Failed to fetch user decals:', err);
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      data: err.response?.data
+    });
+    
+    // Handle specific error cases
+    if (err.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('Roblox API response error:', err.response.status, err.response.data);
+      
+      if (err.response.status === 400) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid request to Roblox API. User ID might not exist or be invalid.' 
+        });
+      } else if (err.response.status === 429) {
+        return res.status(429).json({ 
+          success: false, 
+          error: 'Rate limited by Roblox API. Please try again later.' 
+        });
+      } else if (err.response.status === 404) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'User not found or has no public decals.' 
+        });
+      }
+    } else if (err.request) {
+      // The request was made but no response was received
+      console.error('No response received from Roblox API');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Roblox API is currently unavailable. Please try again later.' 
+      });
+    }
+    
     res.status(500).json({ success: false, error: 'Failed to fetch user decals' });
   }
 });
