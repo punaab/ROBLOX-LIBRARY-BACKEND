@@ -2,24 +2,24 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const Book = require('../models/Book');
-const View = require('../models/View'); // at top
+const BookContent = require('../models/BookContent'); // Add this
+const View = require('../models/View');
 const Playtime = require('../models/Playtime');
 const XP = require('../models/XP');
 const ReadLog = require('../models/ReadLog');
 const axios = require('axios');
 const searchRoutes = require('./search');
-const bomRoute = require('./bookofmormon'); // ⬅️ Add this
-
+const bomRoute = require('./bookofmormon');
+const NodeCache = require('node-cache');
+const bookCache = new NodeCache({ stdTTL: 300 }); // 5-minute TTL
 
 let mostBooksReadCache = [];
 let lastUpdate = 0;
 
 // Cache for most books read
-
 async function updateMostBooksReadCache() {
   const now = Date.now();
   if (now - lastUpdate < 30 * 1000) return; // 30s cache
-
   const data = await ReadLog.aggregate([
     {
       $group: {
@@ -36,12 +36,10 @@ async function updateMostBooksReadCache() {
     { $sort: { count: -1 } },
     { $limit: 10 }
   ]);
-
   for (const entry of data) {
     const xpEntry = await XP.findOne({ playerId: entry.playerId });
     entry.username = xpEntry?.username || "Unknown";
   }
-
   mostBooksReadCache = data;
   lastUpdate = now;
 }
@@ -52,7 +50,7 @@ router.use('/api/search', searchRoutes);
 // GET /leaderboard/most-books-read
 router.get('/leaderboard/most-books-read', async (req, res) => {
   try {
-    await updateMostBooksReadCache(); // Only hits DB if 30s passed
+    await updateMostBooksReadCache();
     res.json(mostBooksReadCache);
   } catch (err) {
     console.error("❌ Failed to fetch leaderboard:", err);
@@ -60,30 +58,48 @@ router.get('/leaderboard/most-books-read', async (req, res) => {
   }
 });
 
-
 // Serve the homepage
 router.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../views/index.html'));
 });
 
-// === Book API ===
-
 // Get all books
 router.get('/api/books', async (req, res) => {
-  const books = await Book.find().lean();
-  res.json(books);
+  try {
+    const cacheKey = `books:${req.query.page || 1}:${req.query.limit || 10}`;
+    const cached = bookCache.get(cacheKey);
+    if (cached) {
+      console.log(`[CACHE] Serving cached books for ${cacheKey}`);
+      return res.json(cached);
+    }
+    const { page = 1, limit = 10 } = req.query;
+    const books = await Book.find({ published: true })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+    const total = await Book.countDocuments({ published: true });
+    const response = { books, total, page: Number(page), limit: Number(limit) };
+    bookCache.set(cacheKey, response);
+    console.log(`[CACHE] Stored books for ${cacheKey}`);
+    res.json(response);
+  } catch (err) {
+    console.error('Error fetching books:', err);
+    res.status(500).json({ error: 'Failed to fetch books' });
+  }
 });
 
 // Get drafts for a player
-// Get drafts for a player (DRAFTS ONLY)
 router.get('/api/books/drafts', async (req, res) => {
   try {
     const playerId = req.query.playerId;
     if (!playerId) {
       return res.status(400).json({ error: 'playerId is required' });
     }
-    // Only return books with BOTH status: 'Draft' AND published: false
     const drafts = await Book.find({ playerId, status: 'Draft', published: false }).lean();
+    for (const draft of drafts) {
+      const content = await BookContent.find({ bookId: draft.bookId }).sort({ pageNumber: 1 }).lean();
+      draft.content = content.map(c => c.text);
+    }
     res.json(drafts);
   } catch (err) {
     console.error('Error fetching drafts:', err);
@@ -98,8 +114,11 @@ router.get('/api/books/published', async (req, res) => {
     if (!playerId) {
       return res.status(400).json({ error: 'playerId is required' });
     }
-    // Only return books with BOTH status: 'Published' AND published: true
     const publishedBooks = await Book.find({ playerId, status: 'Published', published: true }).lean();
+    for (const book of publishedBooks) {
+      const content = await BookContent.find({ bookId: book.bookId }).sort({ pageNumber: 1 }).lean();
+      book.content = content.map(c => c.text);
+    }
     res.json(publishedBooks);
   } catch (err) {
     console.error('Error fetching published books:', err);
@@ -108,11 +127,12 @@ router.get('/api/books/published', async (req, res) => {
 });
 
 // Get a book by bookId
-// Only fetch, don't increment
 router.get('/api/books/:bookId', async (req, res) => {
   try {
-    const book = await Book.findOne({ bookId: req.params.bookId });
+    const book = await Book.findOne({ bookId: req.params.bookId }).lean();
     if (!book) return res.status(404).json({ error: 'Book not found' });
+    const content = await BookContent.find({ bookId: req.params.bookId }).sort({ pageNumber: 1 }).lean();
+    book.content = content.map(c => c.text);
     res.json(book);
   } catch (err) {
     console.error('Error fetching book:', err);
@@ -120,167 +140,66 @@ router.get('/api/books/:bookId', async (req, res) => {
   }
 });
 
-
-// Create a new book
-// Upsert (insert or update) a book by bookId
+// Create or update a book
 router.post('/api/books', async (req, res) => {
   try {
-    // Validate request body
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ error: 'Invalid request body' });
-    }
-
     const { bookId, title, content, playerId, coverId, createdAt } = req.body;
-
     if (!bookId || !title || !content || !playerId) {
-      return res.status(400).json({
-        error: 'Missing required fields: bookId, title, content, and playerId are required'
-      });
+      return res.status(400).json({ error: 'Missing required fields: bookId, title, content, playerId' });
     }
-
-    const author = req.body.author || 'Anonymous';
-
-    // Build update doc (don't overwrite arrays unless provided)
+    // Validate content
+    if (!Array.isArray(content) || content.some(page => typeof page !== 'string' || page.length > 1000)) {
+      return res.status(400).json({ error: 'Invalid content: must be array of strings, max 1000 chars per page' });
+    }
+    if (title.length > 100) {
+      return res.status(400).json({ error: 'Title too long (max 100 chars)' });
+    }
+    // Content moderation
+    const badWords = ['inappropriate', 'offensive']; // Expand this list
+    if (content.some(page => badWords.some(word => page.toLowerCase().includes(word))) || title.toLowerCase().includes(badWords)) {
+      return res.status(400).json({ error: 'Content contains prohibited words' });
+    }
+    // Save content to BookContent
+    await BookContent.deleteMany({ bookId });
+    for (let i = 0; i < content.length; i++) {
+      await BookContent.create({ bookId, pageNumber: i + 1, text: content[i] });
+    }
+    // Save book metadata
     const updateDoc = {
-      title,
-      author,
-      content: Array.isArray(content) ? content : [content],
-      playerId,
-      coverId: coverId || '',
-      status: req.body.status || 'Draft',
-      published: req.body.published || false,
-      upvotes: 0,
-      comments: [],
-      reports: [],
-      createdAt: createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    // ⭐️ Merge existing upvotes/comments/reports (if any) for safety
-    const existing = await Book.findOne({ bookId });
-    if (existing) {
-      updateDoc.upvotes = existing.upvotes;
-      updateDoc.comments = existing.comments;
-      updateDoc.reports = existing.reports;
-    }    
-
-    const options = { upsert: true, new: true, setDefaultsOnInsert: true };
-
-    // Upsert (insert new or update existing by bookId)
-    const book = await Book.findOneAndUpdate(
-      { bookId },
-      updateDoc,
-      options
-    );
-
-    res.status(200).json({
-      message: 'Book upserted!',
-      bookId: book.bookId,
-      book
-    });
-  } catch (err) {
-    console.error('Error upserting book:', err);
-    res.status(500).json({ error: 'Failed to upsert book' });
-  }
-});
-
-// Update an existing book
-router.put('/api/books/:bookId', async (req, res) => {
-  try {
-    const { bookId } = req.params;
-    const { title, content, playerId, coverId, createdAt } = req.body;
-
-    if (!title || !content || !playerId) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: title, content, and playerId are required' 
-      });
-    }
-
-    const update = {
+      bookId,
       title,
       author: req.body.author || 'Anonymous',
-      content: Array.isArray(content) ? content : [content],
       playerId,
-      coverId: coverId || '',
+      coverId: coverId || '6047363187',
       status: req.body.status || 'Draft',
       published: req.body.published || false,
       createdAt: createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      pageCount: content.length,
     };
-
-    const updated = await Book.findOneAndUpdate(
-      { bookId }, 
-      update, 
-      { new: true, upsert: false }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Book not found' 
-      });
+    const existing = await Book.findOne({ bookId });
+    if (existing) {
+      updateDoc.upvotes = existing.upvotes || 0;
+      updateDoc.views = existing.views || 0;
+      updateDoc.voters = existing.voters || [];
+      updateDoc.comments = existing.comments || [];
+      updateDoc.reports = existing.reports || [];
     }
-
-    res.json({ 
-      success: true, 
-      book: updated 
-    });
+    const book = await Book.findOneAndUpdate({ bookId }, updateDoc, { upsert: true, new: true });
+    res.status(200).json({ message: 'Book saved', bookId: book.bookId, book });
   } catch (err) {
-    console.error('Error updating book:', err);
-    res.status(500).json({ error: 'Failed to update book' });
+    console.error('Error saving book:', err);
+    res.status(500).json({ error: 'Failed to save book' });
   }
 });
 
-// Partial update an existing book
-router.patch('/api/books/:bookId', async (req, res) => {
-  try {
-    const { bookId } = req.params;
-    const update = req.body;
-
-    if (update.content && !Array.isArray(update.content)) {
-      update.content = [update.content];
-    }
-    if (!update.author) {
-      update.author = 'Anonymous';
-    }
-    
-    // Always set updatedAt for any update
-    update.updatedAt = new Date().toISOString();
-
-    const updated = await Book.findOneAndUpdate(
-      { bookId }, 
-      update, 
-      { new: true, upsert: false }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Book not found' 
-      });
-    }
-
-    res.json({ 
-      success: true, 
-      book: updated 
-    });
-  } catch (err) {
-    console.error('Error updating book:', err);
-    res.status(500).json({ error: 'Failed to update book' });
-  }
-});
-
-// Delete a book by bookId (not Mongo _id)
+// Delete a book by bookId
 router.delete('/api/books/:bookId', async (req, res) => {
   try {
     const bookId = req.params.bookId;
     console.log('[DELETE] bookId param:', bookId);
-
-    // Extra debug: log all IDs in DB
-    const allBooks = await Book.find({ status: 'Draft' }).lean();
-    console.log('Drafts in DB:', allBooks.map(b => b.bookId));
-
-    const deleted = await Book.findOneAndDelete({ bookId: bookId });
+    await BookContent.deleteMany({ bookId });
+    const deleted = await Book.findOneAndDelete({ bookId });
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Book not found' });
     }
@@ -296,76 +215,38 @@ router.post('/api/books/:bookId/publish', async (req, res) => {
   try {
     const { bookId } = req.params;
     const { playerId, glowingBook, customCover } = req.body;
-
     if (!playerId) {
       return res.status(400).json({ error: 'playerId is required' });
     }
-
-    // Find the draft book
-    const draftBook = await Book.findOne({
-      bookId,
-      playerId,
-      status: 'Draft',
-      published: false
-    });
-
+    const draftBook = await Book.findOne({ bookId, playerId, status: 'Draft', published: false });
     if (!draftBook) {
-      return res.status(404).json({
-        success: false,
-        message: 'Draft book not found or already published'
-      });
+      return res.status(404).json({ success: false, message: 'Draft book not found or already published' });
     }
-
-    // Update the book to published status, including paid add-ons
     const publishedBook = await Book.findOneAndUpdate(
       { bookId },
       {
         status: 'Published',
         published: true,
-        glowingBook: !!glowingBook,      // save as true/false
+        glowingBook: !!glowingBook,
         customCover: !!customCover,
         updatedAt: new Date().toISOString()
       },
       { new: true }
     );
-
     console.log(`[PUBLISH] Book ${bookId} published with add-ons:`, { glowingBook, customCover });
-
-    res.json({
-      success: true,
-      message: 'Book published successfully!',
-      book: publishedBook
-    });
+    res.json({ success: true, message: 'Book published successfully!', book: publishedBook });
   } catch (err) {
     console.error('Error publishing book:', err);
     res.status(500).json({ error: 'Failed to publish book' });
   }
 });
 
-// Legacy redirects for backward compatibility (optional - can be removed)
-router.get('/books/:bookId', async (req, res) => {
-  return res.redirect(308, `/api/books/${req.params.bookId}`);
-});
-router.post('/books', async (req, res) => {
-  return res.redirect(308, '/api/books');
-});
-router.put('/books/:bookId', async (req, res) => {
-  return res.redirect(308, `/api/books/${req.params.bookId}`);
-});
-router.patch('/books/:bookId', async (req, res) => {
-  return res.redirect(308, `/api/books/${req.params.bookId}`);
-});
-
-// === Roblox API Proxy ===
-
 // Fetch user's public Decal assets
 router.get('/api/user-decals/:userId', async (req, res) => {
   try {
     const userId = req.params.userId;
-    // Get first 30 decals (you can add paging if needed)
     const url = `https://catalog.roblox.com/v1/search/items?category=Decal&creatorTargetId=${userId}&limit=30&sortOrder=Desc`;
     const robloxRes = await axios.get(url);
-    // Extract needed data
     const results = (robloxRes.data.data || []).map(asset => ({
       name: asset.name,
       id: asset.id,
@@ -445,8 +326,6 @@ router.post('/api/views', async (req, res) => {
     res.status(500).json({ error: 'Failed to record view' });
   }
 });
-
-// --- In index.js ---
 
 // Store or update playtime for a player
 router.post('/api/playtime', async (req, res) => {
@@ -626,5 +505,15 @@ router.post('/api/xp/bookread', async (req, res) => {
 
 router.use('/api', bomRoute); // ⬅️ This mounts /api/bookofmormon
 
+router.get('/api/bookofmormon', async (req, res) => {
+  const { book, chapter } = req.query;
+  const query = {};
+  if (book) query.book = book;
+  if (chapter) query.chapter = Number(chapter);
+  const scriptures = await Scripture.find(query).lean();
+  res.json(scriptures);
+});
+
+router.use('/api', bomRoute);
 
 module.exports = router;

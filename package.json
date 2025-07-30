@@ -10,7 +10,8 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.0.1",
-    "mongoose": "^8.0.0"
+    "mongoose": "^8.0.0",
+    "node-cache": "^5.1.2"
   },
   "scripts": {
     "start": "node server.js"
