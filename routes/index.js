@@ -148,8 +148,8 @@ router.post('/api/books', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: bookId, title, content, playerId' });
     }
     // Validate content
-    if (!Array.isArray(content) || content.some(page => typeof page !== 'string' || page.length > 1000)) {
-      return res.status(400).json({ error: 'Invalid content: must be array of strings, max 1000 chars per page' });
+    if (!Array.isArray(content) || content.some(page => typeof page !== 'string' || page.length === 0 || page.length > 1000)) {
+      return res.status(400).json({ error: 'Invalid content: must be array of non-empty strings, max 1000 chars per page' });
     }
     if (title.length > 100) {
       return res.status(400).json({ error: 'Title too long (max 100 chars)' });
@@ -166,7 +166,10 @@ router.post('/api/books', async (req, res) => {
     // Save content to BookContent
     await BookContent.deleteMany({ bookId });
     for (let i = 0; i < content.length; i++) {
-      await BookContent.create({ bookId, pageNumber: i + 1, text: content[i] });
+      // Skip empty content to prevent validation errors
+      if (content[i] && content[i].trim().length > 0) {
+        await BookContent.create({ bookId, pageNumber: i + 1, text: content[i] });
+      }
     }
     // Save book metadata
     const updateDoc = {
@@ -272,9 +275,30 @@ router.get('/api/user-decals/:userId', async (req, res) => {
       console.log(`Successfully fetched decals using catalog API for user ${userId}, found ${robloxRes.data.data?.length || 0} items`);
     } catch (err) {
       console.log(`Catalog API failed for user ${userId}:`, err.response?.status);
-      error……
-
-module.exports = router;
+      error = err;
+    }
+    
+    if (error) {
+      console.log(`User ${userId} exists but no decals found`);
+      return res.json({ success: false, decals: [] });
+    }
+    
+    if (robloxRes && robloxRes.data && robloxRes.data.data) {
+      const decals = robloxRes.data.data.map(item => ({
+        id: item.id,
+        name: item.name,
+        description: item.description || '',
+        imageUrl: item.thumbnailUrl || ''
+      }));
+      res.json({ success: true, decals });
+    } else {
+      res.json({ success: false, decals: [] });
+    }
+  } catch (err) {
+    console.error('Error fetching user decals:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch decals' });
+  }
+});
 
 // const express = require('express');
 // const path = require('path');
@@ -915,4 +939,4 @@ module.exports = router;
 
 // router.use('/api', bomRoute);
 
-// module.exports = router;
+module.exports = router;
