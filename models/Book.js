@@ -17,7 +17,15 @@ const bookSchema = new mongoose.Schema({
   updatedAt: { type: String, required: true },
   glowingBook: { type: Boolean, default: false },
   customCover: { type: Boolean, default: false },
-  pageCount: { type: Number, default: 0 }, // New field
+  pageCount: { type: Number, default: 0 }, 
+  genres: { type: [String], default: [] },
+  tags: { type: [String], default: [] },
+  publisher: { type: String, default: '' },
+  publishedDate: { type: String, default: '' },
+  description: { type: String, default: '' },
+  language: { type: String, default: '' },
+  price: { type: Number, default: 0 },
+  rating: { type: Number, default: 0 },
 });
 
 bookSchema.index({ bookId: 1 }, { unique: true });
