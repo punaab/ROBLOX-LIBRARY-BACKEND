@@ -474,7 +474,7 @@ router.post('/api/xp', async (req, res) => {
       { $inc: { xp: Math.floor(amount) }, $set: { username } },
       { upsert: true, new: true }
     );
-    res.json({ success: true, xp: xp.xp }); // Fixed typo: 'time' to 'true'
+    res.json({ success: true, xp: xp.xp }); // Fixed typo
   } catch (err) {
     console.error('Error awarding XP:', err);
     res.status(500).json({ error: 'Failed to award XP' });
@@ -579,6 +579,5 @@ router.post('/api/books/:bookId/purchase-pages', async (req, res) => {
     res.status(500).json({ error: 'Failed to purchase pages' });
   }
 });
-
 
 module.exports = router;
