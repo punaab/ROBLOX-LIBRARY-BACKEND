@@ -9,6 +9,9 @@ router.get('/', async (req, res) => {
     if (book) query.book = book;
     if (chapter) query.chapter = Number(chapter);
     const scriptures = await Scripture.find(query).lean();
+    if (!scriptures.length) {
+      return res.json({ books: [] }); // Explicitly return empty if no data
+    }
     const books = {};
     scriptures.forEach(s => {
       if (!books[s.book]) books[s.book] = { book: s.book, chapters: {} };
