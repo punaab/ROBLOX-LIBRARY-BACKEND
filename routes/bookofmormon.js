@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Scripture = require('../models/Scriptures');
+const Scripture = require('../models/Scripture');
 
 router.get('/', async (req, res) => {
   try {
@@ -9,7 +9,6 @@ router.get('/', async (req, res) => {
     if (book) query.book = book;
     if (chapter) query.chapter = Number(chapter);
     const scriptures = await Scripture.find(query).lean();
-    // Transform data to match client expectations
     const books = {};
     scriptures.forEach(s => {
       if (!books[s.book]) books[s.book] = { book: s.book, chapters: {} };

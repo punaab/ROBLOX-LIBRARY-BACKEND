@@ -12,6 +12,7 @@ const searchRoutes = require('./search');
 const bomRoute = require('./bookofmormon');
 const NodeCache = require('node-cache');
 const bookCache = new NodeCache({ stdTTL: 300 }); // 5-minute TTL
+const Bookmark = require('../models/Bookmark');
 
 let mostBooksReadCache = [];
 let lastUpdate = 0;

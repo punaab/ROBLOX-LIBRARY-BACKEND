@@ -1,0 +1,5 @@
+[33me02be9c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix module import paths - change Scripture to Scriptures
+[33m90a307d[m Update routes and models with latest changes
+[33m772742c[m Update Scriptures model and routes
+[33m1e08118[m Update routes with latest changes
+[33mea96991[m Fix BookContent validation error
