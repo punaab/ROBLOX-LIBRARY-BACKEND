@@ -62,6 +62,7 @@ app.use(limiter);
 const routes = require('./routes/index');     // your general app/book routes
 const bibleRoutes = require('./routes/bible'); // your new Bible API proxy routes
 const bookOfMormonRoutes = require('./routes/bookofmormon'); // Book of Mormon routes
+const migrationRoutes = require('./routes/migration'); // Migration routes
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -76,6 +77,7 @@ app.get('/health', (req, res) => {
 app.use('/', routes);
 app.use('/api/bible', bibleRoutes);
 app.use('/api/bom', bookOfMormonRoutes);  // Book of Mormon routes
+app.use('/api/migration', migrationRoutes);  // Migration routes
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));

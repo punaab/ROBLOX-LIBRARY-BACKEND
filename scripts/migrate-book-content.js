@@ -1,8 +1,17 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const fs = require('fs');
 
-// Connect to MongoDB (replace with your URI)
-mongoose.connect('mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority', { useNewUrlParser: true, useUnifiedTopology: true });
+// Use the same MongoDB connection string as the main server
+// For local development, use localhost if Railway URL is not accessible
+const MONGODB_URI = process.env.MONGO_URL || 'mongodb://localhost:27017/roblox-library';
+
+console.log('Connecting to MongoDB...');
+console.log('Using connection string:', MONGODB_URI.replace(/\/\/.*@/, '//***:***@')); // Hide credentials
+
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 const Scripture = require('../models/Scripture');
 
