@@ -1,7 +1,7 @@
 // scripts/import-bom.js
 const mongoose = require('mongoose');
 const fs = require('fs');
-const Scripture = require('../models/Scripture');
+const Scripture = require('../models/Scriptures');
 
 mongoose.connect('your-mongodb-connection-string', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(async () => {

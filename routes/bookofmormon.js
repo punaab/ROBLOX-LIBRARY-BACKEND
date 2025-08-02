@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Scripture = require('../models/Scripture');
+const Scripture = require('../models/Scriptures');
 
 router.get('/', async (req, res) => {
   try {
