@@ -17,6 +17,12 @@ const Bookmark = require('../models/Bookmark');
 let mostBooksReadCache = [];
 let lastUpdate = 0;
 
+// Search
+router.use('/api/search', searchRoutes);
+
+// Book of Mormon
+router.use('/api/bookofmormon', bomRoute);
+
 // Cache for most books read
 async function updateMostBooksReadCache() {
   const now = Date.now();
@@ -45,11 +51,33 @@ async function updateMostBooksReadCache() {
   lastUpdate = now;
 }
 
-// Search
-router.use('/api/search', searchRoutes);
+router.post('/api/books/read', async (req, res) => {
+  try {
+    const { playerId, username, bookId, title } = req.body;
+    if (!playerId || !bookId) {
+      return res.status(400).json({ error: 'playerId and bookId are required' });
+    }
+    await ReadLog.create({ playerId, bookId, date: new Date().toISOString().split('T')[0], title });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error recording book read:', err);
+    res.status(500).json({ error: 'Failed to record book read' });
+  }
+});
 
-// Book of Mormon
-router.use('/api/bookofmormon', bomRoute);
+router.get('/api/playtime', async (req, res) => {
+  try {
+    const { playerId } = req.query;
+    if (!playerId) {
+      return res.status(400).json({ error: 'playerId is required' });
+    }
+    const playtime = await Playtime.findOne({ playerId }).lean() || { minutes: 0 };
+    res.json({ success: true, minutes: playtime.minutes });
+  } catch (err) {
+    console.error('Error fetching playtime:', err);
+    res.status(500).json({ error: 'Failed to fetch playtime' });
+  }
+});
 
 // GET /leaderboard/most-books-read
 router.get('/api/leaderboard/most-books-read', async (req, res) => {
@@ -594,5 +622,6 @@ router.post('/api/bookmarks', async (req, res) => {
     res.status(500).json({ error: 'Failed to save bookmark' });
   }
 });
+
 
 module.exports = router;
