@@ -1,16 +1,20 @@
 // server/routes/bookofmormon.js
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const Scripture = require('../models/Scripture');
 
-const bomData = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../data/book-of-mormon.json'))
-);
-
-router.get('/bookofmormon', (req, res) => {
-  res.json(bomData);
+router.get('/', async (req, res) => {
+    try {
+        const { book, chapter } = req.query;
+        const query = {};
+        if (book) query.book = book;
+        if (chapter) query.chapter = Number(chapter);
+        const scriptures = await Scripture.find(query).lean();
+        res.json(scriptures);
+    } catch (err) {
+        console.error('Error fetching Book of Mormon:', err);
+        res.status(500).json({ error: 'Failed to fetch scriptures' });
+    }
 });
 
 module.exports = router;
-
