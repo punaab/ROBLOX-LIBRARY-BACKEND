@@ -474,7 +474,7 @@ router.post('/api/xp', async (req, res) => {
       { $inc: { xp: Math.floor(amount) }, $set: { username } },
       { upsert: true, new: true }
     );
-    res.json({ success: time, xp: xp.xp });
+    res.json({ success: true, xp: xp.xp }); // Fixed typo: 'time' to 'true'
   } catch (err) {
     console.error('Error awarding XP:', err);
     res.status(500).json({ error: 'Failed to award XP' });
@@ -555,5 +555,30 @@ router.get('/api/books/:bookId/comments', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
 });
+
+// POST /api/books/:bookId/purchase-pages
+router.post('/api/books/:bookId/purchase-pages', async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const { playerId, additionalPages } = req.body;
+    if (!playerId || !additionalPages || typeof additionalPages !== 'number' || additionalPages <= 0) {
+      return res.status(400).json({ error: 'playerId and a positive additionalPages are required' });
+    }
+    const book = await Book.findOne({ bookId, playerId, status: 'Draft' });
+    if (!book) {
+      return res.status(404).json({ error: 'Draft book not found' });
+    }
+    const updatedBook = await Book.findOneAndUpdate(
+      { bookId },
+      { $inc: { pageCount: additionalPages }, $set: { updatedAt: new Date().toISOString() } },
+      { new: true }
+    );
+    res.json({ success: true, message: 'Pages added successfully', book: updatedBook });
+  } catch (err) {
+    console.error('Error purchasing pages:', err);
+    res.status(500).json({ error: 'Failed to purchase pages' });
+  }
+});
+
 
 module.exports = router;

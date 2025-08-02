@@ -1,13 +1,10 @@
-// models/Scripture.js
 const mongoose = require('mongoose');
+
 const scriptureSchema = new mongoose.Schema({
-  book: String,
-  chapter: Number,
-  reference: String,
-  verses: [{
-    verse: Number,
-    reference: String,
-    text: String,
-  }],
-});
+  book: { type: String, required: true },
+  chapter: { type: Number, required: true },
+  verse: { type: Number, required: true },
+  text: { type: String, required: true }
+}, { collection: 'scriptures' });
+
 module.exports = mongoose.model('Scripture', scriptureSchema);
