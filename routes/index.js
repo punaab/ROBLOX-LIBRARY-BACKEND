@@ -581,4 +581,18 @@ router.post('/api/books/:bookId/purchase-pages', async (req, res) => {
   }
 });
 
+router.post('/api/bookmarks', async (req, res) => {
+  try {
+    const { playerId, bookId, page } = req.body;
+    if (!playerId || !bookId || !page) {
+      return res.status(400).json({ error: 'playerId, bookId, and page are required' });
+    }
+    const bookmark = await Bookmark.create({ playerId, bookId, page });
+    res.json({ success: true, bookmark });
+  } catch (err) {
+    console.error('Error saving bookmark:', err);
+    res.status(500).json({ error: 'Failed to save bookmark' });
+  }
+});
+
 module.exports = router;
