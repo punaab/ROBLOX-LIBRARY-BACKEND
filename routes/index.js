@@ -253,11 +253,18 @@ router.post('/api/books', async (req, res) => {
       return res.status(400).json({ error: 'Content contains prohibited words' });
     }    
     await BookContent.deleteMany({ bookId });
+
+    let wroteAnyPage = false;
     for (let i = 0; i < content.length; i++) {
-      if (content[i] && content[i].trim().length > 0) {
-        await BookContent.create({ bookId, pageNumber: i + 1, text: content[i] });
-      }
+      const raw = (content[i] ?? "").toString();
+      const text = raw.trim().length > 0 ? raw : "Untitled Page"; // <-- ensure non-empty
+      await BookContent.create({ bookId, pageNumber: i + 1, text });
+      wroteAnyPage = true;
     }
+    if (!wroteAnyPage) {
+      await BookContent.create({ bookId, pageNumber: 1, text: "Untitled Page" });
+    }
+    
     const updateDoc = {
       bookId,
       title,
@@ -563,20 +570,16 @@ router.post('/api/books/:bookId/comments', async (req, res) => {
 // GET /api/books/:bookId/comments
 router.get('/api/books/:bookId', async (req, res) => {
   try {
-    const { bookId } = req.params;
-    const book = await Book.findOne({ bookId }).lean();
+    const book = await Book.findOne({ bookId: req.params.bookId }).lean();
     if (!book) return res.status(404).json({ error: 'Book not found' });
 
-    const contentDocs = await BookContent.find({ bookId }).sort({ pageNumber: 1 }).lean();
-    const content = contentDocs.map(c => c.text);
-    const payload = {
-      ...book,
-      content,
-      pageCount: content.length
-    };
+    const contentDocs = await BookContent.find({ bookId: req.params.bookId })
+      .sort({ pageNumber: 1 }).lean();
 
-    console.log(`[GET /api/books/${bookId}] title="${book.title}" pages=${content.length}`);
-    res.json(payload);
+    const content = contentDocs.map(c => c.text);
+    book.content = content.length > 0 ? content : ["Untitled Page"]; // <-- fallback
+
+    res.json(book);
   } catch (err) {
     console.error('Error fetching book:', err);
     res.status(500).json({ error: 'Failed to fetch book' });
