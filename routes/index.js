@@ -226,19 +226,7 @@ router.get('/api/books/published', async (req, res) => {
   }
 });
 
-// Get a book by bookId
-router.get('/api/books/:bookId', async (req, res) => {
-  try {
-    const book = await Book.findOne({ bookId: req.params.bookId }).lean();
-    if (!book) return res.status(404).json({ error: 'Book not found' });
-    const content = await BookContent.find({ bookId: req.params.bookId }).sort({ pageNumber: 1 }).lean();
-    book.content = content.map(c => c.text);
-    res.json(book);
-  } catch (err) {
-    console.error('Error fetching book:', err);
-    res.status(500).json({ error: 'Failed to fetch book' });
-  }
-});
+
 
 // Create or update a book
 router.post('/api/books', async (req, res) => {
@@ -257,9 +245,13 @@ router.post('/api/books', async (req, res) => {
       return res.status(400).json({ error: 'Invalid genres: must be an array of up to 3 non-empty strings' });
     }
     const badWords = ['inappropriate', 'offensive'];
-    if (content.some(page => badWords.some(word => page.toLowerCase().includes(word))) || title.toLowerCase().includes(badWords)) {
+    const titleHasBad = badWords.some(w => title.toLowerCase().includes(w));
+    const contentHasBad = Array.isArray(content) && content.some(page =>
+      badWords.some(w => (page || '').toLowerCase().includes(w))
+    );
+    if (titleHasBad || contentHasBad) {
       return res.status(400).json({ error: 'Content contains prohibited words' });
-    }
+    }    
     await BookContent.deleteMany({ bookId });
     for (let i = 0; i < content.length; i++) {
       if (content[i] && content[i].trim().length > 0) {
@@ -569,19 +561,25 @@ router.post('/api/books/:bookId/comments', async (req, res) => {
 });
 
 // GET /api/books/:bookId/comments
-router.get('/api/books/:bookId/comments', async (req, res) => {
+router.get('/api/books/:bookId', async (req, res) => {
   try {
-    const book = await Book.findOne({ bookId: req.params.bookId });
-    if (!book) {
-      return res.status(404).json({ error: "Book not found" });
-    }
-    const sorted = [...(book.comments || [])].sort((a, b) =>
-      (b.likes?.length || 0) - (a.likes?.length || 0) || new Date(b.createdAt) - new Date(a.createdAt)
-    );
-    res.json({ success: true, comments: sorted });
+    const { bookId } = req.params;
+    const book = await Book.findOne({ bookId }).lean();
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    const contentDocs = await BookContent.find({ bookId }).sort({ pageNumber: 1 }).lean();
+    const content = contentDocs.map(c => c.text);
+    const payload = {
+      ...book,
+      content,
+      pageCount: content.length
+    };
+
+    console.log(`[GET /api/books/${bookId}] title="${book.title}" pages=${content.length}`);
+    res.json(payload);
   } catch (err) {
-    console.error('Error fetching comments:', err);
-    res.status(500).json({ error: 'Failed to fetch comments' });
+    console.error('Error fetching book:', err);
+    res.status(500).json({ error: 'Failed to fetch book' });
   }
 });
 
